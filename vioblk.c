@@ -26,7 +26,6 @@
 
 
 #include <sys/modctl.h>
-#include <sys/blkdev.h>
 #include <sys/types.h>
 #include <sys/errno.h>
 #include <sys/param.h>
@@ -42,8 +41,12 @@
 #include <sys/debug.h>
 #include <sys/pci.h>
 #include <sys/sysmacros.h>
+
+#include "solaris-compat.h"
 #include "virtiovar.h"
 #include "virtioreg.h"
+
+#include "blkdev.h"
 
 /* Feature bits */
 #define	VIRTIO_BLK_F_BARRIER	(1<<0)
@@ -174,7 +177,6 @@ static bd_ops_t vioblk_ops = {
 	vioblk_write,
 };
 
-static int vioblk_quiesce(dev_info_t *);
 static int vioblk_attach(dev_info_t *, ddi_attach_cmd_t);
 static int vioblk_detach(dev_info_t *, ddi_detach_cmd_t);
 
@@ -190,7 +192,6 @@ static struct dev_ops vioblk_dev_ops = {
 	NULL,		/* cb_ops */
 	NULL,		/* bus_ops */
 	NULL,		/* power */
-	vioblk_quiesce	/* quiesce */
 };
 
 
@@ -250,7 +251,7 @@ static ddi_dma_attr_t vioblk_bd_dma_attr = {
 	1,				/* dma_attr_granular	*/
 	0,				/* dma_attr_flags	*/
 };
-
+#if 1
 static int
 vioblk_rw(struct vioblk_softc *sc, bd_xfer_t *xfer, int type,
     uint32_t len)
@@ -776,6 +777,7 @@ vioblk_ksupdate(kstat_t *ksp, int rw)
 
 	return (0);
 }
+#endif
 
 static int
 vioblk_attach(dev_info_t *devinfo, ddi_attach_cmd_t cmd)
@@ -785,6 +787,8 @@ vioblk_attach(dev_info_t *devinfo, ddi_attach_cmd_t cmd)
 	struct vioblk_softc *sc;
 	struct virtio_softc *vsc;
 	struct vioblk_stats *ks_data;
+
+	cmn_err(CE_WARN, "!\n");
 
 	instance = ddi_get_instance(devinfo);
 
@@ -803,7 +807,6 @@ vioblk_attach(dev_info_t *devinfo, ddi_attach_cmd_t cmd)
 		ret = DDI_FAILURE;
 		goto exit;
 	}
-
 	sc = kmem_zalloc(sizeof (struct vioblk_softc), KM_SLEEP);
 	ddi_set_driver_private(devinfo, sc);
 
@@ -1015,6 +1018,7 @@ vioblk_detach(dev_info_t *devinfo, ddi_detach_cmd_t cmd)
 		return (DDI_FAILURE);
 	}
 
+
 	(void) bd_detach_handle(sc->bd_h);
 	virtio_stop_vq_intr(sc->sc_vq);
 	virtio_release_ints(&sc->sc_virtio);
@@ -1028,21 +1032,12 @@ vioblk_detach(dev_info_t *devinfo, ddi_detach_cmd_t cmd)
 	return (DDI_SUCCESS);
 }
 
-static int
-vioblk_quiesce(dev_info_t *devinfo)
-{
-	struct vioblk_softc *sc = ddi_get_driver_private(devinfo);
-
-	virtio_stop_vq_intr(sc->sc_vq);
-	virtio_device_reset(&sc->sc_virtio);
-
-	return (DDI_SUCCESS);
-}
-
 int
 _init(void)
 {
 	int rv;
+
+	cmn_err(CE_WARN, "_init");
 
 	bd_mod_init(&vioblk_dev_ops);
 

@@ -69,6 +69,7 @@
 #include <sys/sysmacros.h>
 #include <sys/pci.h>
 
+#include "solaris-compat.h"
 #include "virtiovar.h"
 #include "virtioreg.h"
 #define	NDEVNAMES	(sizeof (virtio_device_name) / sizeof (char *))
@@ -1332,6 +1333,7 @@ static struct modlinkage modlinkage = {
 int
 _init(void)
 {
+	cmn_err(CE_WARN, "virtio: _init");
 	return (mod_install(&modlinkage));
 }
 

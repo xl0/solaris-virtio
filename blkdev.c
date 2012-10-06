@@ -49,7 +49,9 @@
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
 #include <sys/note.h>
-#include <sys/blkdev.h>
+
+#include "solaris-compat.h"
+#include "blkdev.h"
 
 #define	BD_MAXPART	64
 #define	BDINST(dev)	(getminor(dev) / BD_MAXPART)
@@ -75,7 +77,7 @@ struct bd {
 	uint32_t	d_qactive;
 	uint32_t	d_maxxfer;
 	uint32_t	d_blkshift;
-	uint64_t	d_numblks;
+	int64_t		d_numblks;
 	ddi_devid_t	d_devid;
 
 	kmem_cache_t	*d_cache;
@@ -148,9 +150,12 @@ static int bd_awrite(dev_t, struct aio_req *, cred_t *);
 static int bd_prop_op(dev_t, dev_info_t *, ddi_prop_op_t, int, char *,
     caddr_t, int *);
 
-static int bd_tg_rdwr(dev_info_t *, uchar_t, void *, diskaddr_t, size_t,
-    void *);
-static int bd_tg_getinfo(dev_info_t *, int, void *, void *);
+static int bd_tg_rdwr(dev_info_t *, uchar_t, void *, diskaddr_t, size_t);
+static int bd_tg_getphygeom(dev_info_t *devi, cmlb_geom_t *phygeomp);
+static int bd_tg_getvirtgeom(dev_info_t *devi, cmlb_geom_t *virtgeomp);
+static int bd_tg_getcapacity(dev_info_t *devi, diskaddr_t *capp);
+static int bd_tg_getattribute(dev_info_t *devi, tg_attribute_t *tgattribute);
+// static int bd_tg_getinfo(dev_info_t *, int, void *);
 static int bd_xfer_ctor(void *, void *, int);
 static void bd_xfer_dtor(void *, void *);
 static void bd_sched(bd_t *);
@@ -161,9 +166,12 @@ static int bd_check_state(bd_t *, enum dkio_state *);
 static int bd_flush_write_cache(bd_t *, struct dk_callback *);
 
 struct cmlb_tg_ops bd_tg_ops = {
-	TG_DK_OPS_VERSION_1,
+	TG_DK_OPS_VERSION_0,
 	bd_tg_rdwr,
-	bd_tg_getinfo,
+	bd_tg_getphygeom,
+	bd_tg_getvirtgeom,
+	bd_tg_getcapacity,
+	bd_tg_getattribute
 };
 
 static struct cb_ops bd_cb_ops = {
@@ -199,7 +207,6 @@ struct dev_ops bd_dev_ops = {
 	&bd_cb_ops, 		/* driver operations */
 	NULL,			/* bus operations */
 	NULL,			/* power */
-	ddi_quiesce_not_needed,	/* quiesce */
 };
 
 static struct modldrv modldrv = {
@@ -219,6 +226,7 @@ int
 _init(void)
 {
 	int	rv;
+	cmn_err(CE_WARN, "blkdev _init");
 
 	rv = ddi_soft_state_init(&bd_state, sizeof (struct bd), 2);
 	if (rv != DDI_SUCCESS) {
@@ -237,6 +245,7 @@ int
 _fini(void)
 {
 	int	rv;
+	cmn_err(CE_WARN, "blkdev _fini");
 
 	rv = mod_remove(&modlinkage);
 	if (rv == DDI_SUCCESS) {
@@ -374,8 +383,8 @@ bd_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	bd->d_cache = kmem_cache_create(kcache, sizeof (bd_xfer_impl_t), 8,
 	    bd_xfer_ctor, bd_xfer_dtor, NULL, bd, NULL, 0);
 
-	bd->d_ksp = kstat_create(ddi_driver_name(dip), inst, NULL, "disk",
-	    KSTAT_TYPE_IO, 1, KSTAT_FLAG_PERSISTENT);
+	bd->d_ksp = kstat_create((char *)ddi_driver_name(dip),
+	    inst, NULL, "disk", KSTAT_TYPE_IO, 1, KSTAT_FLAG_PERSISTENT);
 	if (bd->d_ksp != NULL) {
 		bd->d_ksp->ks_lock = &bd->d_iomutex;
 		kstat_install(bd->d_ksp);
@@ -403,11 +412,11 @@ bd_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	if (drive.d_maxxfer && drive.d_maxxfer < bd->d_maxxfer)
 		bd->d_maxxfer = drive.d_maxxfer;
 
-
+	/* XXX */
 	rv = cmlb_attach(dip, &bd_tg_ops, DTYPE_DIRECT,
-	    bd->d_removable, bd->d_hotpluggable,
+	    bd->d_removable,/* bd->d_hotpluggable,*/
 	    drive.d_lun >= 0 ? DDI_NT_BLOCK_CHAN : DDI_NT_BLOCK,
-	    CMLB_FAKE_LABEL_ONE_PARTITION, bd->d_cmlbh, 0);
+	    /*CMLB_FAKE_LABEL_ONE_PARTITION*/ 0, bd->d_cmlbh);
 	if (rv != 0) {
 		cmlb_free_handle(&bd->d_cmlbh);
 		kmem_cache_destroy(bd->d_cache);
@@ -481,7 +490,7 @@ bd_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	} else {
 		kmem_free(bd->d_kiop, sizeof (kstat_io_t));
 	}
-	cmlb_detach(bd->d_cmlbh, 0);
+	cmlb_detach(bd->d_cmlbh/*, 0*/);
 	cmlb_free_handle(&bd->d_cmlbh);
 	if (bd->d_devid)
 		ddi_devid_free(bd->d_devid);
@@ -711,7 +720,7 @@ bd_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 
 	bd_update_state(bd);
 
-	if (cmlb_validate(bd->d_cmlbh, 0, 0) != 0) {
+	if (cmlb_validate(bd->d_cmlbh/*, 0, 0*/) != 0) {
 
 		/* non-blocking opens are allowed to succeed */
 		if (!ndelay) {
@@ -719,7 +728,7 @@ bd_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 			goto done;
 		}
 	} else if (cmlb_partinfo(bd->d_cmlbh, part, &nblks, &lba,
-	    NULL, NULL, 0) == 0) {
+	    NULL, NULL) == 0) {
 
 		/*
 		 * We read the partinfo, verify valid ranges.  If the
@@ -751,11 +760,12 @@ bd_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 		goto done;
 	}
 	if (flag & FEXCL) {
+		int i;
 		if (bd->d_open_lyr[part]) {
 			rv = EBUSY;
 			goto done;
 		}
-		for (int i = 0; i < OTYP_LYR; i++) {
+		for (i = 0; i < OTYP_LYR; i++) {
 			if (bd->d_open_reg[i] & mask) {
 				rv = EBUSY;
 				goto done;
@@ -783,6 +793,7 @@ done:
 static int
 bd_close(dev_t dev, int flag, int otyp, cred_t *credp)
 {
+	int		i;
 	bd_t		*bd;
 	minor_t		inst;
 	minor_t		part;
@@ -814,12 +825,12 @@ bd_close(dev_t dev, int flag, int otyp, cred_t *credp)
 	} else {
 		bd->d_open_reg[otyp] &= ~mask;
 	}
-	for (int i = 0; i < 64; i++) {
+	for (i = 0; i < 64; i++) {
 		if (bd->d_open_lyr[part]) {
 			last = B_FALSE;
 		}
 	}
-	for (int i = 0; last && (i < OTYP_LYR); i++) {
+	for (i = 0; last && (i < OTYP_LYR); i++) {
 		if (bd->d_open_reg[i]) {
 			last = B_FALSE;
 		}
@@ -827,7 +838,7 @@ bd_close(dev_t dev, int flag, int otyp, cred_t *credp)
 	mutex_exit(&bd->d_ocmutex);
 
 	if (last) {
-		cmlb_invalidate(bd->d_cmlbh, 0);
+		cmlb_invalidate(bd->d_cmlbh);
 	}
 	rw_exit(&bd_lock);
 
@@ -859,8 +870,7 @@ bd_dump(dev_t dev, caddr_t caddr, daddr_t blkno, int nblk)
 	 * do cmlb, but do it synchronously unless we already have the
 	 * partition (which we probably should.)
 	 */
-	if (cmlb_partinfo(bd->d_cmlbh, part, &psize, &pstart, NULL, NULL,
-	    (void *)1)) {
+	if (cmlb_partinfo(bd->d_cmlbh, part, &psize, &pstart, NULL, NULL)) {
 		rw_exit(&bd_lock);
 		return (ENXIO);
 	}
@@ -977,7 +987,7 @@ bd_strategy(struct buf *bp)
 	}
 
 	if (cmlb_partinfo(bd->d_cmlbh, part, &p_nblks, &p_lba,
-	    NULL, NULL, 0)) {
+	    NULL, NULL)) {
 		bioerror(bp, ENXIO);
 		biodone(bp);
 		return (0);
@@ -1037,7 +1047,7 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 		return (ENXIO);
 	}
 
-	rv = cmlb_ioctl(bd->d_cmlbh, dev, cmd, arg, flag, credp, rvalp, 0);
+	rv = cmlb_ioctl(bd->d_cmlbh, dev, cmd, arg, flag, credp, rvalp);
 	if (rv != ENOTTY)
 		return (rv);
 
@@ -1059,7 +1069,7 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 	case DKIOCINFO: {
 		struct dk_cinfo cinfo;
 		bzero(&cinfo, sizeof (cinfo));
-		cinfo.dki_ctype = DKC_BLKDEV;
+		cinfo.dki_ctype = /*DKC_BLKDEV*/ DKC_UNKNOWN;
 		cinfo.dki_cnum = ddi_get_instance(ddi_get_parent(bd->d_dip));
 		(void) snprintf(cinfo.dki_cname, sizeof (cinfo.dki_cname),
 		    "%s", ddi_driver_name(ddi_get_parent(bd->d_dip)));
@@ -1095,6 +1105,7 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 		}
 		return (0);
 	}
+/*
 	case DKIOCREADONLY: {
 		int i;
 		i = bd->d_rdonly ? 1 : 0;
@@ -1103,6 +1114,7 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 		}
 		return (0);
 	}
+*/
 	case DKIOCSTATE: {
 		enum dkio_state	state;
 		if (ddi_copyin(ptr, &state, sizeof (state), flag)) {
@@ -1138,20 +1150,20 @@ bd_prop_op(dev_t dev, dev_info_t *dip, ddi_prop_op_t prop_op, int mod_flags,
     char *name, caddr_t valuep, int *lengthp)
 {
 	bd_t	*bd;
-
 	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
-	if (bd == NULL)
+//	if (bd == NULL)
 		return (ddi_prop_op(dev, dip, prop_op, mod_flags,
 		    name, valuep, lengthp));
 
-	return (cmlb_prop_op(bd->d_cmlbh, dev, dip, prop_op, mod_flags, name,
-	    valuep, lengthp, BDPART(dev), 0));
+//	return (cmlb_prop_op(bd->d_cmlbh, dev, dip, prop_op, mod_flags, name,
+//	    valuep, lengthp, BDPART(dev), 0));
+
 }
 
 
 static int
 bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
-    size_t length, void *tg_cookie)
+    size_t length)
 {
 	bd_t		*bd;
 	buf_t		*bp;
@@ -1159,6 +1171,8 @@ bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
 	int		rv;
 	int		(*func)(void *, bd_xfer_t *);
 	int		kmflag;
+	/* XXX */
+	void *tg_cookie = KM_SLEEP;
 
 	/*
 	 * If we are running in polled mode (such as during dump(9e)
@@ -1209,12 +1223,44 @@ bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
 	return (rv);
 }
 
+/*
+ * We don't have any "geometry" as such, let cmlb
+ * fabricate something.
+ */
 static int
-bd_tg_getinfo(dev_info_t *dip, int cmd, void *arg, void *tg_cookie)
+bd_tg_getphygeom(dev_info_t *devi, cmlb_geom_t *phygeomp)
+{
+	return (EINVAL);
+}
+
+static int
+bd_tg_getvirtgeom(dev_info_t *devi, cmlb_geom_t *virtgeomp)
+{
+	return (EINVAL);
+}
+static int
+bd_tg_getcapacity(dev_info_t *devi, diskaddr_t *capp)
+{
+	bd_t		*bd;
+	bd = ddi_get_soft_state(bd_state, ddi_get_instance(devi));
+
+	bd_update_state(bd);
+	*capp = bd->d_numblks;
+	return (0);
+}
+static int
+bd_tg_getattribute(dev_info_t *devi, tg_attribute_t *tgattribute)
+{
+	/*XXX*/
+	return (ENOTSUP);
+}
+
+#if 0
+static int
+bd_tg_getinfo(dev_info_t *dip, int cmd, void *arg)
 {
 	bd_t		*bd;
 
-	_NOTE(ARGUNUSED(tg_cookie));
 	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
 
 	switch (cmd) {
@@ -1252,7 +1298,7 @@ bd_tg_getinfo(dev_info_t *dip, int cmd, void *arg, void *tg_cookie)
 		return (EINVAL);
 	}
 }
-
+#endif
 
 static void
 bd_sched(bd_t *bd)
@@ -1390,9 +1436,9 @@ bd_update_state(bd_t *bd)
 
 	if (docmlb) {
 		if (state == DKIO_INSERTED) {
-			(void) cmlb_validate(bd->d_cmlbh, 0, 0);
+			(void) cmlb_validate(bd->d_cmlbh);
 		} else {
-			cmlb_invalidate(bd->d_cmlbh, 0);
+			cmlb_invalidate(bd->d_cmlbh);
 		}
 	}
 }
@@ -1400,9 +1446,10 @@ bd_update_state(bd_t *bd)
 static int
 bd_check_state(bd_t *bd, enum dkio_state *state)
 {
+/* XXX */
 	clock_t		when;
-
 	for (;;) {
+
 
 		bd_update_state(bd);
 
@@ -1413,17 +1460,16 @@ bd_check_state(bd_t *bd, enum dkio_state *state)
 			mutex_exit(&bd->d_statemutex);
 			break;
 		}
-
-		when = drv_usectohz(1000000);
-		if (cv_reltimedwait_sig(&bd->d_statecv, &bd->d_statemutex,
-		    when, TR_CLOCK_TICK) == 0) {
+		when = drv_usectohz(1000000) + ddi_get_lbolt();
+//		when = drv_usectohz(1000000);
+		if (cv_timedwait_sig(&bd->d_statecv, &bd->d_statemutex,
+		    when) == 0) {
 			mutex_exit(&bd->d_statemutex);
 			return (EINTR);
 		}
 
 		mutex_exit(&bd->d_statemutex);
 	}
-
 	return (0);
 }
 
