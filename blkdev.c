@@ -50,8 +50,35 @@
 #include <sys/sunddi.h>
 #include <sys/note.h>
 
-#include "solaris-compat.h"
 #include "blkdev.h"
+#include "solaris-compat.h"
+
+#if (SOLARIS_COMPAT_VERSION == 10)
+#include "cmlb_impl.h"
+/*
+ * cmlb_is_valid
+ * 	Get status on whether the incore label/geom data is valid
+ *
+ * Arguments:
+ *	cmlbhandle      cmlb handle associated with device.
+ *
+ * Return values:
+ *	B_TRUE if incore label/geom data is valid.
+ *	B_FALSE otherwise.
+ *
+ */
+
+boolean_t
+cmlb_is_valid(cmlb_handle_t cmlbhandle)
+{
+	struct cmlb_lun *cl = (struct cmlb_lun *)cmlbhandle;
+
+	if (cmlbhandle == NULL)
+		return (B_FALSE);
+
+	return (cl->un_f_geometry_is_valid);
+}
+#endif
 
 #define	BD_MAXPART	64
 #define	BDINST(dev)	(getminor(dev) / BD_MAXPART)
@@ -226,8 +253,6 @@ int
 _init(void)
 {
 	int	rv;
-	cmn_err(CE_WARN, "blkdev _init");
-
 	rv = ddi_soft_state_init(&bd_state, sizeof (struct bd), 2);
 	if (rv != DDI_SUCCESS) {
 		return (rv);
@@ -245,7 +270,6 @@ int
 _fini(void)
 {
 	int	rv;
-	cmn_err(CE_WARN, "blkdev _fini");
 
 	rv = mod_remove(&modlinkage);
 	if (rv == DDI_SUCCESS) {
@@ -412,11 +436,9 @@ bd_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	if (drive.d_maxxfer && drive.d_maxxfer < bd->d_maxxfer)
 		bd->d_maxxfer = drive.d_maxxfer;
 
-	/* XXX */
-	rv = cmlb_attach(dip, &bd_tg_ops, DTYPE_DIRECT,
-	    bd->d_removable,/* bd->d_hotpluggable,*/
+	rv = cmlb_attach(dip, &bd_tg_ops, DTYPE_DIRECT, bd->d_removable,
 	    drive.d_lun >= 0 ? DDI_NT_BLOCK_CHAN : DDI_NT_BLOCK,
-	    /*CMLB_FAKE_LABEL_ONE_PARTITION*/ 0, bd->d_cmlbh);
+	    0, bd->d_cmlbh);
 	if (rv != 0) {
 		cmlb_free_handle(&bd->d_cmlbh);
 		kmem_cache_destroy(bd->d_cache);
@@ -1145,18 +1167,27 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 	return (ENOTTY);
 }
 
+
 static int
 bd_prop_op(dev_t dev, dev_info_t *dip, ddi_prop_op_t prop_op, int mod_flags,
     char *name, caddr_t valuep, int *lengthp)
 {
-	bd_t	*bd;
+	diskaddr_t nblocks64;
+	bd_t *bd;
+
+	cmn_err(CE_NOTE, "bd_prop_op");
 	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
-//	if (bd == NULL)
+
+	if (bd == NULL || dev == DDI_DEV_T_ANY || !cmlb_is_valid(bd->d_cmlbh))
 		return (ddi_prop_op(dev, dip, prop_op, mod_flags,
 		    name, valuep, lengthp));
 
-//	return (cmlb_prop_op(bd->d_cmlbh, dev, dip, prop_op, mod_flags, name,
-//	    valuep, lengthp, BDPART(dev), 0));
+	(void) cmlb_partinfo(bd->d_cmlbh, BDPART(dev),
+	    (diskaddr_t *)&nblocks64, NULL, NULL, NULL);
+
+	return (ddi_prop_op_nblocks(dev, dip, prop_op, mod_flags,
+		    name, valuep, lengthp, nblocks64));
+
 
 }
 
@@ -1171,14 +1202,12 @@ bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
 	int		rv;
 	int		(*func)(void *, bd_xfer_t *);
 	int		kmflag;
-	/* XXX */
-	void *tg_cookie = KM_SLEEP;
 
 	/*
 	 * If we are running in polled mode (such as during dump(9e)
 	 * execution), then we cannot sleep for kernel allocations.
 	 */
-	kmflag = tg_cookie ? KM_NOSLEEP : KM_SLEEP;
+	kmflag = KM_SLEEP;
 
 	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
 
@@ -1213,7 +1242,8 @@ bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
 		freerbuf(bp);
 		return (rv);
 	}
-	xi->i_flags = tg_cookie ? BD_XFER_POLL : 0;
+//	xi->i_flags = tg_cookie ? BD_XFER_POLL : 0;
+	xi->i_flags = 0;
 	xi->i_blkno = start;
 	bd_submit(bd, xi);
 	(void) biowait(bp);
@@ -1246,13 +1276,18 @@ bd_tg_getcapacity(dev_info_t *devi, diskaddr_t *capp)
 
 	bd_update_state(bd);
 	*capp = bd->d_numblks;
-	return (0);
+	return (DDI_SUCCESS);
 }
 static int
 bd_tg_getattribute(dev_info_t *devi, tg_attribute_t *tgattribute)
 {
-	/*XXX*/
-	return (ENOTSUP);
+	bd_t		*bd;
+	bd = ddi_get_soft_state(bd_state, ddi_get_instance(devi));
+
+	bd_update_state(bd);
+	tgattribute->media_is_writable =
+	    bd->d_rdonly ? B_FALSE : B_TRUE;
+	return (DDI_SUCCESS);
 }
 
 #if 0
@@ -1446,16 +1481,16 @@ bd_update_state(bd_t *bd)
 static int
 bd_check_state(bd_t *bd, enum dkio_state *state)
 {
-/* XXX */
 	clock_t		when;
 	for (;;) {
-
-
+		cmn_err(CE_NOTE, "bd_check_state");
+		cmn_err(CE_NOTE, "bd_check_state1");
 		bd_update_state(bd);
 
 		mutex_enter(&bd->d_statemutex);
 
 		if (bd->d_state != *state) {
+			cmn_err(CE_NOTE, "bd_check_state - new");
 			*state = bd->d_state;
 			mutex_exit(&bd->d_statemutex);
 			break;

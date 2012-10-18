@@ -10,6 +10,9 @@
 #define container_of(m, s, name)                        \
 	(void *)((uintptr_t)(m) - (uintptr_t)offsetof(s, name))
 
+#define	TRACE { \
+	cmn_err(CE_NOTE, "^%s:%d %s()\n", __FILE__, __LINE__, __func__); \
+}
 
 /*PRINTFLIKE3*/
 static void
@@ -25,3 +28,4 @@ dev_err(dev_info_t *dip, int ce, char *fmt, ...)
 	vcmn_err(ce, buf, ap);
 	va_end(ap);
 }
+

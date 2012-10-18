@@ -1037,8 +1037,6 @@ _init(void)
 {
 	int rv;
 
-	cmn_err(CE_WARN, "_init");
-
 	bd_mod_init(&vioblk_dev_ops);
 
 	if ((rv = mod_install(&modlinkage)) != 0) {

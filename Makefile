@@ -1,6 +1,11 @@
 
+# 10 or 11
+SOLARIS_COMPAT_VERSION=10
+
 #CFLAGS=-D_KERNEL -DDEBUG -m64 -xarch=sse2a -xmodel=kernel -g
-CFLAGS= -D_KERNEL -DDEBUG -m64 -mcmodel=kernel -mno-red-zone -ffreestanding -nodefaultlibs -Wall -g
+CFLAGS= -D_KERNEL -DDEBUG -m64 -mcmodel=kernel -mno-red-zone -ffreestanding
+CFLAGS+= -nodefaultlibs -Wall -g
+CFLAGS+= -DSOLARIS_COMPAT_VERSION=$(SOLARIS_COMPAT_VERSION)
 
 LDFLAGS=-r
 
@@ -28,7 +33,7 @@ vioblk: vioblk.c virtiovar.h blkdev.h solaris-compat.h
 #	$(CTFMERGE) -L VERSION -o vioblk vioblk.o
 
 
-blkdev: blkdev.c blkdev.h solaris-compat.h
+blkdev: blkdev.c blkdev.h solaris-compat.h cmlb_impl.h
 	$(CC) $(CFLAGS) -c blkdev.c -o blkdev.o
 #	$(CTFCONVERT) -i -L VERSION blkdev.o
 	$(LD) -r -dy -Nmisc/cmlb blkdev.o -o blkdev

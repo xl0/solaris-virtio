@@ -1333,7 +1333,6 @@ static struct modlinkage modlinkage = {
 int
 _init(void)
 {
-	cmn_err(CE_WARN, "virtio: _init");
 	return (mod_install(&modlinkage));
 }
 
