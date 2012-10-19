@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# Taken from "Writing Device Drivers"
+# http://docs.oracle.com/cd/E18752_01/html/816-4854/loading-32.html
+ 
+PATH="/usr/bin:/usr/sbin:${PATH}"
+export PATH
+ 
+#
+# Driver info
+#
+VIOBLK_DRV=vioblk
+BLKDEV_DRV=blkdev
+REM_DRV=/usr/sbin/rem_drv
+ 
+#
+# Select the correct rem_drv options to execute.
+# rem_drv touches /reconfigure to cause the
+# next boot to be a reconfigure boot.
+#
+if [ "${BASEDIR}" = "/" ]; then
+    #
+    # On a running system, modify the
+    # system files and remove the driver
+    #
+    REM_DRV_FLAGS=""
+else     
+    #
+    # On a client, modify the system files
+    # relative to BASEDIR
+    #
+    REM_DRV_FLAGS="-b ${BASEDIR}"
+fi
+ 
+${REM_DRV} ${REM_DRV_FLAGS} ${VIOBLK_DRV}
+${REM_DRV} ${REM_DRV_FLAGS} ${BLKDEV_DRV}
+ 
+exit 0

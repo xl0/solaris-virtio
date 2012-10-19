@@ -1,0 +1,14 @@
+
+i pkginfo
+i postinstall
+i preremove
+
+d none kernel ? ? ?
+d none kernel/drv ? ? ?
+d none kernel/drv/amd64 ? ? ?
+f none kernel/drv/amd64/blkdev 0755 sys root
+f none kernel/drv/amd64/vioblk 0755 sys root
+d none kernel/misc ? ? ?
+d none kernel/misc/amd64 ? ? ?
+f none kernel/misc/amd64/virtio 0755 sys root
+

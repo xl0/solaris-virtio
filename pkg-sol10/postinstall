@@ -1,0 +1,59 @@
+#!/bin/sh
+#
+# Taken from "Writing Device Drivers"
+# http://docs.oracle.com/cd/E18752_01/html/816-4854/loading-32.html
+
+PATH="/usr/bin:/usr/sbin:${PATH}"
+export PATH
+
+#
+# Driver info
+#
+VIOBLK_DRV=vioblk
+VIOBLK_DRVALIAS="pci1af4,1001"
+BLKDEV_DRV=blkdev
+DRVPERM='* 0666 root sys'
+
+ADD_DRV=/usr/sbin/add_drv
+
+#
+# Select the correct add_drv options to execute.
+# add_drv touches /reconfigure to cause the
+# next boot to be a reconfigure boot.
+#
+if [ "${BASEDIR}" = "/" ]; then
+    #
+    # On a running system, modify the
+    # system files and attach the driver
+    #
+    ADD_DRV_FLAGS=""
+else     
+    #
+    # On a client, modify the system files
+    # relative to BASEDIR
+    #
+    ADD_DRV_FLAGS="-b ${BASEDIR}"
+fi       
+ 
+#
+# Make sure add_drv has not been previously executed
+# before attempting to add the driver.
+#
+grep "^${BLKDEV_DRV} " $BASEDIR/etc/name_to_major > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    ${ADD_DRV} ${ADD_DRV_FLAGS} ${BLKDEV_DRV}
+    if [ $? -ne 0 ]; then
+        echo "postinstall: add_drv $BLKDEV_DRV failed\n" >&2
+        exit 1
+    fi
+fi
+
+grep "^${VIOBLK_DRV} " $BASEDIR/etc/name_to_major > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    ${ADD_DRV} ${ADD_DRV_FLAGS} -m "${DRVPERM}" -i "${VIOBLK_DRVALIAS}" ${VIOBLK_DRV}
+    if [ $? -ne 0 ]; then
+        echo "postinstall: add_drv $VIOBLK_DRV failed\n" >&2
+        exit 1
+    fi
+fi
+exit 0
