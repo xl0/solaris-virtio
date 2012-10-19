@@ -99,6 +99,7 @@ struct bd {
 	unsigned	d_open_lyr[BD_MAXPART];	/* open count */
 	uint64_t	d_open_excl;	/* bit mask indexed by partition */
 	uint64_t	d_open_reg[OTYPCNT];		/* bit mask */
+	int 		d_kmflag;
 
 	uint32_t	d_qsize;
 	uint32_t	d_qactive;
@@ -182,7 +183,6 @@ static int bd_tg_getphygeom(dev_info_t *devi, cmlb_geom_t *phygeomp);
 static int bd_tg_getvirtgeom(dev_info_t *devi, cmlb_geom_t *virtgeomp);
 static int bd_tg_getcapacity(dev_info_t *devi, diskaddr_t *capp);
 static int bd_tg_getattribute(dev_info_t *devi, tg_attribute_t *tgattribute);
-// static int bd_tg_getinfo(dev_info_t *, int, void *);
 static int bd_xfer_ctor(void *, void *, int);
 static void bd_xfer_dtor(void *, void *);
 static void bd_sched(bd_t *);
@@ -378,6 +378,7 @@ bd_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	bd->d_ops = hdl->h_ops;
 	bd->d_private = hdl->h_private;
 	bd->d_blkshift = 9;	/* 512 bytes, to start */
+	bd->d_kmflag = KM_SLEEP;
 
 	if (bd->d_maxxfer % DEV_BSIZE) {
 		cmn_err(CE_WARN, "%s: maximum transfer misaligned!", name);
@@ -888,6 +889,10 @@ bd_dump(dev_t dev, caddr_t caddr, daddr_t blkno, int nblk)
 		rw_exit(&bd_lock);
 		return (ENXIO);
 	}
+
+	/* cmlb_partinfo could cause some IO, and we should not sleep in it. */
+	bd->d_kmflag = KM_NOSLEEP;
+
 	/*
 	 * do cmlb, but do it synchronously unless we already have the
 	 * partition (which we probably should.)
@@ -896,6 +901,8 @@ bd_dump(dev_t dev, caddr_t caddr, daddr_t blkno, int nblk)
 		rw_exit(&bd_lock);
 		return (ENXIO);
 	}
+
+	bd->d_kmflag = KM_SLEEP;
 
 	if ((blkno + nblk) > psize) {
 		rw_exit(&bd_lock);
@@ -1175,22 +1182,20 @@ bd_prop_op(dev_t dev, dev_info_t *dip, ddi_prop_op_t prop_op, int mod_flags,
 	diskaddr_t nblocks64;
 	bd_t *bd;
 
-	cmn_err(CE_NOTE, "bd_prop_op");
 	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
 
+	/* This piece actually taken from the sd driver */
 	if (bd == NULL || dev == DDI_DEV_T_ANY || !cmlb_is_valid(bd->d_cmlbh))
-		return (ddi_prop_op(dev, dip, prop_op, mod_flags,
-		    name, valuep, lengthp));
+	    return (ddi_prop_op(dev, dip, prop_op, mod_flags,
+	        name, valuep, lengthp));
 
 	(void) cmlb_partinfo(bd->d_cmlbh, BDPART(dev),
 	    (diskaddr_t *)&nblocks64, NULL, NULL, NULL);
 
 	return (ddi_prop_op_nblocks(dev, dip, prop_op, mod_flags,
-		    name, valuep, lengthp, nblocks64));
-
+	    name, valuep, lengthp, nblocks64));
 
 }
-
 
 static int
 bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
@@ -1203,13 +1208,13 @@ bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
 	int		(*func)(void *, bd_xfer_t *);
 	int		kmflag;
 
+
+	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
 	/*
 	 * If we are running in polled mode (such as during dump(9e)
 	 * execution), then we cannot sleep for kernel allocations.
 	 */
-	kmflag = KM_SLEEP;
-
-	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
+	kmflag = bd->d_kmflag;
 
 	if (P2PHASE(length, (1U << bd->d_blkshift)) != 0) {
 		/* We can only transfer whole blocks at a time! */
@@ -1242,8 +1247,8 @@ bd_tg_rdwr(dev_info_t *dip, uchar_t cmd, void *bufaddr, diskaddr_t start,
 		freerbuf(bp);
 		return (rv);
 	}
-//	xi->i_flags = tg_cookie ? BD_XFER_POLL : 0;
-	xi->i_flags = 0;
+
+	xi->i_flags = (kmflag == KM_NOSLEEP) ? BD_XFER_POLL : 0;
 	xi->i_blkno = start;
 	bd_submit(bd, xi);
 	(void) biowait(bp);
@@ -1289,51 +1294,6 @@ bd_tg_getattribute(dev_info_t *devi, tg_attribute_t *tgattribute)
 	    bd->d_rdonly ? B_FALSE : B_TRUE;
 	return (DDI_SUCCESS);
 }
-
-#if 0
-static int
-bd_tg_getinfo(dev_info_t *dip, int cmd, void *arg)
-{
-	bd_t		*bd;
-
-	bd = ddi_get_soft_state(bd_state, ddi_get_instance(dip));
-
-	switch (cmd) {
-	case TG_GETPHYGEOM:
-	case TG_GETVIRTGEOM:
-		/*
-		 * We don't have any "geometry" as such, let cmlb
-		 * fabricate something.
-		 */
-		return (ENOTTY);
-
-	case TG_GETCAPACITY:
-		bd_update_state(bd);
-		*(diskaddr_t *)arg = bd->d_numblks;
-		return (0);
-
-	case TG_GETBLOCKSIZE:
-		*(uint32_t *)arg = (1U << bd->d_blkshift);
-		return (0);
-
-	case TG_GETATTR:
-		/*
-		 * It turns out that cmlb really doesn't do much for
-		 * non-writable media, but lets make the information
-		 * available for it in case it does more in the
-		 * future.  (The value is currently used for
-		 * triggering special behavior for CD-ROMs.)
-		 */
-		bd_update_state(bd);
-		((tg_attribute_t *)arg)->media_is_writable =
-		    bd->d_rdonly ? B_FALSE : B_TRUE;
-		return (0);
-
-	default:
-		return (EINVAL);
-	}
-}
-#endif
 
 static void
 bd_sched(bd_t *bd)
@@ -1483,20 +1443,16 @@ bd_check_state(bd_t *bd, enum dkio_state *state)
 {
 	clock_t		when;
 	for (;;) {
-		cmn_err(CE_NOTE, "bd_check_state");
-		cmn_err(CE_NOTE, "bd_check_state1");
 		bd_update_state(bd);
 
 		mutex_enter(&bd->d_statemutex);
 
 		if (bd->d_state != *state) {
-			cmn_err(CE_NOTE, "bd_check_state - new");
 			*state = bd->d_state;
 			mutex_exit(&bd->d_statemutex);
 			break;
 		}
 		when = drv_usectohz(1000000) + ddi_get_lbolt();
-//		when = drv_usectohz(1000000);
 		if (cv_timedwait_sig(&bd->d_statecv, &bd->d_statemutex,
 		    when) == 0) {
 			mutex_exit(&bd->d_statemutex);
