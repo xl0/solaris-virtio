@@ -1,11 +1,13 @@
 
 # 10 or 11
-SOLARIS_COMPAT_VERSION=10
+SOLARIS=10
+
+export VERSION=0.9
 
 #CFLAGS=-D_KERNEL -DDEBUG -m64 -xarch=sse2a -xmodel=kernel -g
 CFLAGS= -D_KERNEL -DDEBUG -m64 -mcmodel=kernel -mno-red-zone -ffreestanding
 CFLAGS+= -nodefaultlibs -Wall -g
-CFLAGS+= -DSOLARIS_COMPAT_VERSION=$(SOLARIS_COMPAT_VERSION)
+CFLAGS+= -DSOLARIS_COMPAT_VERSION=$(SOLARIS)
 
 LDFLAGS=-r
 
@@ -18,7 +20,12 @@ CTFCONVERT=$(ONDIR)/ctfconvert
 CC=gcc
 LD=/usr/ccs/bin/ld
 
-all: virtio vioblk blkdev
+all: build package
+
+package:
+	cd pkg-sol$(SOLARIS); ./mkpkg.sh
+
+build: virtio vioblk blkdev
 
 virtio: virtio.c virtiovar.h virtioreg.h solaris-compat.h
 	$(CC) $(CFLAGS) -c virtio.c -o virtio.o
