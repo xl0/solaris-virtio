@@ -1,7 +1,7 @@
 PKG=SUNWvioblk
 NAME=Virtio Block driver
 ARCH=i386
-VERSION=0.9
+VERSION=1.0
 VENDOR=Alexey Zaytsev http://zaytsev.su/solaris-virtio
 EMAIL=alexey.zaytsev@gmail.com
 MAXINST=1
