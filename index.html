@@ -1,0 +1,98 @@
+
+<title>Solaris 10 / 11 Virtio drivers</title>
+</head>
+
+<p>
+<a href=http://zaytsev.su>Back</a>
+</p>
+
+<p> <h2>Yes, finally, virtio drivers for Solaris 10 / 11.</h2>At least the virtio-block driver. Virtio-net is still work in progress.</p>
+
+
+<h3>Current version: 1.0</h3> Older versions in <a href=packages> archive</a>
+
+<p> <h2>Virtio?</h2>Virtio is the paravirtualization driver framewrowk, used in <a href=http://www.linux-kvm.org>QEMU/KVM</a> and <a href=https://www.virtualbox.org> VirtualBox</a> hypervisors. In short, instead of emulating a real-world IDE/SCSI controller, the hypervisor emulates a device, specially designed to perform well in a virtualized environment. As a result, you get much better I/O performance, with less CPU usage on the host. On the downside, most operating systems, beside Linux and illumos, need additional drivers to communicate with the virtio device.</p>
+
+<h2> Enabling the virtio-block (disk) driver</h2>
+<h3> QEMU/KVM</h3>
+<p> Check out the <a href=http://www.linux-kvm.org/page/Virtio>KVM wiki</a>. In short, specify the disk using the -drive option:<pre>-drive file=/path/to/image/or/block/device,if=virtio.</pre> For best performance, I suggest using a dedicated disk/partition to store the guest data. In this case, add the cache=none option to -drive:<pre>-drive file=/path/to/block/device,if=virtio,cache=none.</pre> If you have to use a disk image, add cache=writeback for reasonable performance.
+
+Or just use virt-manager.</p>
+<h3> Virtualbox</h3>
+Just set the disk type to virtio in the GUI. <h4>WARNING: The driver has not been tested with VirtualBox. It should work, but I did not try it. Please report any bugs <a href=https://github.com/xl0/solaris-virtio/issues>here</a></h4>
+
+<h2>Using the driver</h2>
+<h3>OpenIndiana/SmartOS/Omnios/Other illumos-based distributions</h3>
+The virtio-block driver is now <a href=https://github.com/illumos/illumos-gate/commit/e0724c534a46ca4754330bc022bf1e2a68f5bb93>part</a> <a href=https://github.com/illumos/illumos-gate/commit/1c5bc425cc346c6844d58e1fdd8794e9553dd289>of</a> <a href=http://illumos.org>illumos</a>, so there is no point in maintaining a separate driver. Just bug your distro to update to a new kernel, if they did not.
+
+<h3>Solaris 10</h3>
+<h4>Installation time update (ITU)</h4>
+Moving an existing rpool to virtio might be a bit non-trivial, so it's best to just install Solaris on a virtio device.
+<ul>
+<li>Download the itu iso: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/vioblk-1.0-itu.iso>vioblk-1.0-itu.iso</a>.</li>
+<li>Pass it as the second cdrom drive. For qemu/kvm, add -drive file=vioblk-1.0-itu.iso,media=cdrom to the command line.</li>
+<li>During the Solaris installation, choose "Apply driver updates" option.</li>
+<li>Choose the "[1] CD/DVD devices" option.</li>
+If everything works out fine, you should see:
+<pre>
+Enter choice: 1
+Searching for Driver Updates on CD/DVD devices.
+
+Extracting Driver Updates from /dev/dsk/c0t0d0p0 (QEMU QEMU DVD-ROM 1.1.).
+Installing Driver Updates onto miniroot.
+Installing Virtio Block driver as &ltSUNWvioblk&gt
+WARNING: vioblk0: Using legacy interrupts
+NOTICE: vioblk0: host features: 710006d4, guest features: 10000276
+NOTICE: vioblk0: Host features: Generic ( INDIRECT_DESC ) Vioblk ( SEG_MAX GEOMETRY BLK_SIZE SCSI FLUSH TOPOLOGY )
+NOTICE: vioblk0: Negotiated features: Generic ( INDIRECT_DESC ) Vioblk ( SEG_MAX GEOMETRY BLK_SIZE FLUSH )
+NOTICE: vioblk0: nblks=125829120 blksize=512  num_seg=126, seg_size=4096, maxxfer=516096
+NOTICE: vioblk0: Allocated 128 entries for vq 0:I/O request (16384 incdirect descs)
+NOTICE: vioblk0: devid 00000000000000000000
+Installation of &ltSUNWviobl&gt was successful.
+</pre>
+<li>Proceed with the installation as usual</li>
+</ul>
+
+<h4>Installing the driver package</h4>
+<ul>
+<li>Download the package: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/SUNWvioblk-1.0>SUNWvioblk-1.0</a></li>
+<li>Use pkgadd to install the package: pkgadd -d SUNWvioblk-1.0</li>
+</ul>
+
+<h4>Moving an existing installation to virtio</h4>
+<ul>
+<li>Install the driver.</li>
+<li>I don't need to tell you about bakups, do I?</li>
+<li>Inside the solaris instance, run 'touch /reconfigure', then shut it down.</li>
+<li>Attach the disk as a virtio device, like described above.</li>
+<li>Download the itu iso: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/vioblk-1.0-itu.iso>vioblk-1.0-itu.iso</a>. The installation CD obviously lacks the virtio driver, so you need the itu iso.</li>
+<li>Attach the installation CD image and the itu image, boot from the installation CD:
+<pre>-cdrom sol-10-u10-ga2-x86-dvd.iso -boot d -drive file=vioblk-1.0-itu.iso,media=cdrom</pre>
+</li>
+<li>Install the itu, just like described above.</li>
+<li>Start a user shell, don't mount the existing system's rpool when asked.</li>
+<li>Run <pre>zpool import -f rpool</pre> and <pre>zpool export rpool</pre></li>
+<li>Poweroff, detach the CDs, the system should be bootable.</li>
+<li>Import the other pools.</li>
+</ul>
+
+<h3>Solaris 11</h3>
+Work in progress.
+
+
+<h2>Building from source code</h2>
+<h3>Solaris 10</h3>
+<ul>
+<li>You need to have gmake and gcc istalled. I used the packages from <a href=http://www.opencsw.org/>opencsw</a>.
+<li>Download the driver source code from <a href=https://github.com/xl0/solaris-virtio>github</a>. Either using git, or get the generated <a href=https://github.com/xl0/solaris-virtio/tarball/master>tarball</a>.</li>
+<li>Run gmake in the driver source directory. It should build the driver and generate the package/itu iso in the pkg-sol10 directory</li>
+</ul>
+<h3>Solaris 11</h3>
+Work in progress
+
+<h2>Reporting bugs</h2>
+Please report any bugs <a href=https://github.com/xl0/solaris-virtio/issues>here</a>. Really, report them. I enjoy fixing bugs.
+
+</html>
+
+
