@@ -1098,7 +1098,7 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 	case DKIOCINFO: {
 		struct dk_cinfo cinfo;
 		bzero(&cinfo, sizeof (cinfo));
-		cinfo.dki_ctype = /*DKC_BLKDEV*/ DKC_UNKNOWN;
+		cinfo.dki_ctype = DKC_DIRECT;
 		cinfo.dki_cnum = ddi_get_instance(ddi_get_parent(bd->d_dip));
 		(void) snprintf(cinfo.dki_cname, sizeof (cinfo.dki_cname),
 		    "%s", ddi_driver_name(ddi_get_parent(bd->d_dip)));
@@ -1165,6 +1165,10 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 
 		rv = bd_flush_write_cache(bd, dkc);
 		return (rv);
+	}
+
+	case DKIOCADDBAD: {
+		return (0);
 	}
 
 	default:
