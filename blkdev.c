@@ -1098,7 +1098,14 @@ bd_ioctl(dev_t dev, int cmd, intptr_t arg, int flag, cred_t *credp, int *rvalp)
 	case DKIOCINFO: {
 		struct dk_cinfo cinfo;
 		bzero(&cinfo, sizeof (cinfo));
-		cinfo.dki_ctype = DKC_DIRECT;
+
+/*
+ * DKC_UNKNOWN breaks the solaris 10 installer. DKC_DIRECT (an ATA
+ * controller) is not trivial to implement. Defining a new type seems
+ * to just work.
+ */
+#define DKC_BLKDEV 100
+		cinfo.dki_ctype = DKC_BLKDEV;
 		cinfo.dki_cnum = ddi_get_instance(ddi_get_parent(bd->d_dip));
 		(void) snprintf(cinfo.dki_cname, sizeof (cinfo.dki_cname),
 		    "%s", ddi_driver_name(ddi_get_parent(bd->d_dip)));
