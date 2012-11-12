@@ -14,6 +14,10 @@
 	cmn_err(CE_NOTE, "%s:%d %s()\n", __FILE__, __LINE__, __func__); \
 }
 
+#if (SOLARIS_COMPAT_VERSION == 11)
+#define __builtin_stdarg_start __builtin_va_start 
+#endif
+
 /*PRINTFLIKE3*/
 static void
 dev_err(dev_info_t *dip, int ce, char *fmt, ...)
