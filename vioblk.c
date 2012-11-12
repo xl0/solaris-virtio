@@ -177,6 +177,7 @@ static bd_ops_t vioblk_ops = {
 	vioblk_write,
 };
 
+static int vioblk_quiesce(dev_info_t *);
 static int vioblk_attach(dev_info_t *, ddi_attach_cmd_t);
 static int vioblk_detach(dev_info_t *, ddi_detach_cmd_t);
 
@@ -192,6 +193,9 @@ static struct dev_ops vioblk_dev_ops = {
 	NULL,		/* cb_ops */
 	NULL,		/* bus_ops */
 	NULL,		/* power */
+#if (SOLARIS_COMPAT_VERSION == 11)
+	vioblk_quiesce  /* quiesce */
+#endif
 };
 
 
@@ -795,13 +799,13 @@ vioblk_attach(dev_info_t *devinfo, ddi_attach_cmd_t cmd)
 	switch (cmd) {
 	case DDI_ATTACH:
 		break;
-
+#if (SOLARIS_COMPAT_VERSION  != 11)
 	case DDI_RESUME:
 	case DDI_PM_RESUME:
 		dev_err(devinfo, CE_WARN, "resume not supported yet");
 		ret = DDI_FAILURE;
 		goto exit;
-
+#endif
 	default:
 		dev_err(devinfo, CE_WARN, "cmd 0x%x not recognized", cmd);
 		ret = DDI_FAILURE;
@@ -1008,11 +1012,11 @@ vioblk_detach(dev_info_t *devinfo, ddi_detach_cmd_t cmd)
 	switch (cmd) {
 	case DDI_DETACH:
 		break;
-
+#if (SOLARIS_COMPAT_VERSION != 11)
 	case DDI_PM_SUSPEND:
 		cmn_err(CE_WARN, "suspend not supported yet");
 		return (DDI_FAILURE);
-
+#endif
 	default:
 		cmn_err(CE_WARN, "cmd 0x%x unrecognized", cmd);
 		return (DDI_FAILURE);
@@ -1031,6 +1035,17 @@ vioblk_detach(dev_info_t *devinfo, ddi_detach_cmd_t cmd)
 
 	return (DDI_SUCCESS);
 }
+static int
+vioblk_quiesce(dev_info_t *devinfo)
+{
+	struct vioblk_softc *sc = ddi_get_driver_private(devinfo);
+
+	virtio_stop_vq_intr(sc->sc_vq);
+	virtio_device_reset(&sc->sc_virtio);
+
+	return (DDI_SUCCESS);
+}
+
 
 int
 _init(void)
