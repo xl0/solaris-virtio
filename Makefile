@@ -1,6 +1,6 @@
 
 # 10 or 11
-SOLARIS=10
+SOLARIS=11
 
 export VERSION=1.1
 
@@ -25,7 +25,13 @@ all: build package
 package:
 	cd pkg-sol$(SOLARIS); ./mkpkg.sh
 
-build: virtio vioblk blkdev
+ifeq ($(SOLARIS), 10)
+BLKDEV=blkdev
+else
+BLKDEV=blkdev_illumos
+endif
+
+build: virtio vioblk $(BLKDEV)
 
 virtio: virtio.c virtiovar.h virtioreg.h solaris-compat.h
 	$(CC) $(CFLAGS) -c virtio.c -o virtio.o
@@ -33,18 +39,18 @@ virtio: virtio.c virtiovar.h virtioreg.h solaris-compat.h
 	$(LD) -r virtio.o -o virtio
 #	$(CTFMERGE) -L VERSION -o virtio virtio.o
 
-vioblk: vioblk.c virtiovar.h blkdev.h solaris-compat.h
+vioblk: vioblk.c virtiovar.h $(BLKDEV).h solaris-compat.h
 	$(CC) $(CFLAGS) -c vioblk.c -o vioblk.o
 #	$(CTFCONVERT) -i -L VERSION vioblk.o
-	$(LD) -r -dy -N misc/virtio -N drv/blkdev vioblk.o -o vioblk
+	$(LD) -r -dy -N misc/virtio -N drv/$(BLKDEV) vioblk.o -o vioblk
 #	$(CTFMERGE) -L VERSION -o vioblk vioblk.o
 
 
-blkdev: blkdev.c blkdev.h solaris-compat.h cmlb_impl.h
-	$(CC) $(CFLAGS) -c blkdev.c -o blkdev.o
+$(BLKDEV): $(BLKDEV).c $(BLKDEV).h solaris-compat.h cmlb_impl.h
+	$(CC) $(CFLAGS) -c $(BLKDEV).c -o $(BLKDEV).o
 #	$(CTFCONVERT) -i -L VERSION blkdev.o
-	$(LD) -r -dy -Nmisc/cmlb blkdev.o -o blkdev
+	$(LD) -r -dy -Nmisc/cmlb $(BLKDEV).o -o $(BLKDEV)
 #	$(CTFMERGE) -L VERSION -o blkdev blkdev.o
 
 clean:
-	rm -f virtio vioblk blkdev vioblk.o virtio.o blkdev.o
+	rm -f virtio vioblk blkdev blkdev_illumos vioblk.o virtio.o blkdev.o blkdev_illumos.o
