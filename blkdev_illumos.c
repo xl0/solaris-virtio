@@ -49,7 +49,8 @@
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
 #include <sys/note.h>
-#include <sys/blkdev.h>
+
+#include "blkdev_illumos.h"
 
 #define	BD_MAXPART	64
 #define	BDINST(dev)	(getminor(dev) / BD_MAXPART)
@@ -751,11 +752,12 @@ bd_open(dev_t *devp, int flag, int otyp, cred_t *credp)
 		goto done;
 	}
 	if (flag & FEXCL) {
+		int i;
 		if (bd->d_open_lyr[part]) {
 			rv = EBUSY;
 			goto done;
 		}
-		for (int i = 0; i < OTYP_LYR; i++) {
+		for (i = 0; i < OTYP_LYR; i++) {
 			if (bd->d_open_reg[i] & mask) {
 				rv = EBUSY;
 				goto done;
@@ -784,6 +786,7 @@ static int
 bd_close(dev_t dev, int flag, int otyp, cred_t *credp)
 {
 	bd_t		*bd;
+	int		i;
 	minor_t		inst;
 	minor_t		part;
 	uint64_t	mask;
@@ -814,12 +817,12 @@ bd_close(dev_t dev, int flag, int otyp, cred_t *credp)
 	} else {
 		bd->d_open_reg[otyp] &= ~mask;
 	}
-	for (int i = 0; i < 64; i++) {
+	for (i = 0; i < 64; i++) {
 		if (bd->d_open_lyr[part]) {
 			last = B_FALSE;
 		}
 	}
-	for (int i = 0; last && (i < OTYP_LYR); i++) {
+	for (i = 0; last && (i < OTYP_LYR); i++) {
 		if (bd->d_open_reg[i]) {
 			last = B_FALSE;
 		}
@@ -1232,6 +1235,7 @@ bd_tg_getinfo(dev_info_t *dip, int cmd, void *arg, void *tg_cookie)
 		return (0);
 
 	case TG_GETBLOCKSIZE:
+	case TG_GETPHYBLOCKSIZE:
 		*(uint32_t *)arg = (1U << bd->d_blkshift);
 		return (0);
 
@@ -1552,7 +1556,7 @@ bd_attach_handle(dev_info_t *dip, bd_handle_t hdl)
 	hdl->h_ops.o_drive_info(hdl->h_private, &drive);
 
 	hdl->h_parent = dip;
-	hdl->h_name = "blkdev";
+	hdl->h_name = "blkdev_illumos";
 
 	if (drive.d_lun >= 0) {
 		(void) snprintf(hdl->h_addr, sizeof (hdl->h_addr), "%X,%X",
