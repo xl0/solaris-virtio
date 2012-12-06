@@ -3,6 +3,11 @@ i pkginfo
 i postinstall
 i preremove
 
+
+d none usr ? ? ?
+d none usr/bin ? ? ?
+f none usr/bin/dsktest 755 sys root
+f none usr/bin/dsktrial 755 sys root
 d none kernel ? ? ?
 d none kernel/drv ? ? ?
 d none kernel/drv/amd64 ? ? ?

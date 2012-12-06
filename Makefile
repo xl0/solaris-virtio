@@ -2,7 +2,7 @@
 # 10 or 11
 SOLARIS=10
 
-export VERSION=1.1
+export VERSION=1.2-testing
 
 #CFLAGS=-D_KERNEL -DDEBUG -m64 -xarch=sse2a -xmodel=kernel -g
 CFLAGS= -D_KERNEL -DDEBUG -m64 -mcmodel=kernel -mno-red-zone -ffreestanding
@@ -25,7 +25,7 @@ all: build package
 package:
 	cd pkg-sol$(SOLARIS); ./mkpkg.sh
 
-build: virtio vioblk blkdev
+build: virtio vioblk blkdev dsktest dsktrial
 
 virtio: virtio.c virtiovar.h virtioreg.h solaris-compat.h
 	$(CC) $(CFLAGS) -c virtio.c -o virtio.o
@@ -45,6 +45,12 @@ blkdev: blkdev.c blkdev.h solaris-compat.h cmlb_impl.h
 #	$(CTFCONVERT) -i -L VERSION blkdev.o
 	$(LD) -r -dy -Nmisc/cmlb blkdev.o -o blkdev
 #	$(CTFMERGE) -L VERSION -o blkdev blkdev.o
+
+dsktest: dsktest.c
+	$(CC) -Wall -m64 dsktest.c -o dsktest
+
+dsktrial: dsktrial.c
+	$(CC) -Wall -m64 dsktrial.c -o dsktrial
 
 clean:
 	rm -f virtio vioblk blkdev vioblk.o virtio.o blkdev.o
