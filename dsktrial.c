@@ -9,6 +9,23 @@
 #include <string.h>
 
 
+static void print_geom(struct dk_geom *g)
+{
+	printf("geom = {\n");
+	printf("\tdkg_ncyl = %u\n", g->dkg_ncyl);
+	printf("\tdkg_acyl = %u\n", g->dkg_acyl);
+	printf("\tdkg_bcyl = %u\n", g->dkg_bcyl);
+	printf("\tdkg_nhead = %u\n", g->dkg_nhead);
+	printf("\tdkg_nsect = %u\n", g->dkg_nsect);
+	printf("\tdkg_intrlv = %u\n", g->dkg_intrlv);
+	printf("\tdkg_apc = %u\n", g->dkg_apc);
+	printf("\tdkg_rpm = %u\n", g->dkg_rpm);
+	printf("\tdkg_pcyl = %u\n", g->dkg_pcyl);
+	printf("\tdkg_write_reinstruct = %u\n", g->dkg_write_reinstruct);
+	printf("\tdkg_read_reinstruct = %u\n", g->dkg_read_reinstruct);
+	printf("}\n");
+}
+
 static void print_cinfo(struct dk_cinfo *i)
 {
 	printf("cinfo = {\n");
@@ -72,6 +89,7 @@ int main(int argc, char *argv[])
 	struct dk_cinfo cinfo;
 	struct extvtoc exvt;
 	struct dk_minfo minfo;
+	struct dk_geom geom;
 	int removable;
 
 	int ret;
@@ -80,6 +98,7 @@ int main(int argc, char *argv[])
 	memset(&cinfo, 0, sizeof(cinfo));
 	memset(&exvt, 0, sizeof(exvt));
 	memset(&minfo, 0, sizeof(minfo));
+	memset(&geom, 0, sizeof(geom));
 
 	if (argc != 2) {
 		fprintf(stderr,
@@ -91,6 +110,7 @@ int main(int argc, char *argv[])
 	fd = open(argv[1], O_RDWR | O_NDELAY);
 	if (fd < 0) {
 		perror("Can't open device");
+		return 1;
 	}
 
 	/* That's the order format issues the ioctls, let's follow */
@@ -99,14 +119,16 @@ int main(int argc, char *argv[])
 	ret = ioctl(fd, DKIOCINFO, &cinfo);
 	if (ret == 0) {
 		print_cinfo(&cinfo);
+		printf("\n");
 	} else {
 		perror("DKIOCINFO failed");
 	}
 
 	printf("Issuing DKIOCREMOVABLE\n");
-	ret = ioctl(fd, DKIOCINFO, &removable);
+	ret = ioctl(fd, DKIOCREMOVABLE, &removable);
 	if (ret == 0) {
 		printf("Removable: %d\n", removable);
+		printf("\n");
 	} else {
 		perror("DKIOCREMOVABLE failed");
 	}
@@ -116,6 +138,7 @@ int main(int argc, char *argv[])
 	ret = ioctl(fd, DKIOCGMEDIAINFO, &minfo);
 	if (ret == 0) {
 		print_minfo(&minfo);
+		printf("\n");
 	} else {
 		perror("DKIOCGMEDIAINFO failed");
 	}
@@ -124,10 +147,19 @@ int main(int argc, char *argv[])
 	ret = ioctl(fd, DKIOCGEXTVTOC, &exvt);
 	if (ret == 0) {
 		print_exvt(&exvt);
+		printf("\n");
 	} else {
 		perror("DKIOCGEXTVTOC failed");
 	}
 
+	printf("Issuing DKIOCGGEOM\n");
+	ret = ioctl(fd, DKIOCGGEOM, &geom);
+	if (ret == 0) {
+		print_geom(&geom);
+		printf("\n");
+	} else {
+		perror("DKIOCGGEOM failed");
+	}
 	printf("Done.\n");
 
 	return 0;
