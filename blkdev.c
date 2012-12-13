@@ -572,7 +572,7 @@ bd_xfer_alloc(bd_t *bd, struct buf *bp, int (*func)(void *, bd_xfer_t *),
     int kmflag)
 {
 	bd_xfer_impl_t		*xi;
-	int			rv;
+	int			rv = DDI_SUCCESS;
 	int			status;
 	unsigned		dir;
 	int			(*cb)(caddr_t);
