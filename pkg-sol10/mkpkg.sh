@@ -6,7 +6,7 @@ cp ../vioblk .
 cp ../dsktest .
 cp ../dsktrial .
 
-rm -f SUNWvioblk vioblk-$VERSION-itu.iso 
+rm -f SUNWvioblk vioblk-$VERSION-itu.iso
 rm -fr /var/spool/pkg/SUNWviobl
 
 pkgmk -o

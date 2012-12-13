@@ -9,7 +9,7 @@
 <p> <h2>Yes, finally, virtio drivers for Solaris 10 / 11.</h2>At least the virtio-block driver. Virtio-net is still work in progress.</p>
 
 
-<h3>Current version: 1.1</h3> Older versions in <a href=packages> archive</a>
+<h3>Current version: 1.2</h3> Older versions in <a href=packages> archive</a>
 
 <p> <h2>Virtio?</h2>Virtio is the paravirtualization driver framewrowk, used in <a href=http://www.linux-kvm.org>QEMU/KVM</a> and <a href=https://www.virtualbox.org> VirtualBox</a> hypervisors. In short, instead of emulating a real-world IDE/SCSI controller, the hypervisor emulates a device, specially designed to perform well in a virtualized environment. As a result, you get much better I/O performance, with less CPU usage on the host. On the downside, most operating systems, beside Linux and illumos, need additional drivers to communicate with the virtio device.</p>
 
@@ -29,8 +29,8 @@ The virtio-block driver is now <a href=https://github.com/illumos/illumos-gate/c
 <h4>Installation time update (ITU)</h4>
 Moving an existing rpool to virtio might be a bit non-trivial, so it's best to just install Solaris on a virtio device.
 <ul>
-<li>Download the itu iso: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/vioblk-1.1-itu.iso>vioblk-1.1-itu.iso</a>.</li>
-<li>Pass it as the second cdrom drive. For qemu/kvm, add -drive file=vioblk-1.1-itu.iso,media=cdrom to the command line.</li>
+<li>Download the itu iso: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/vioblk-1.2-itu.iso>vioblk-1.2-itu.iso</a>.</li>
+<li>Pass it as the second cdrom drive. For qemu/kvm, add -drive file=vioblk-1.2-itu.iso,media=cdrom to the command line.</li>
 <li>During the Solaris installation, choose "Apply driver updates" option.</li>
 <li>Choose the "[1] CD/DVD devices" option.</li>
 If everything works out fine, you should see:
@@ -55,9 +55,10 @@ Installation of &ltSUNWviobl&gt was successful.
 
 <h4>Installing the driver package</h4>
 <ul>
-<li>Download the package: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/SUNWvioblk-1.1>SUNWvioblk-1.1</a></li>
-<li>Use pkgadd to install the package: pkgadd -d SUNWvioblk-1.1</li>
+<li>Download the package: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/SUNWvioblk-1.2>SUNWvioblk-1.2</a></li>
+<li>Use pkgadd to install the package: pkgadd -d SUNWvioblk-1.2</li>
 </ul>
+Or both in one step: pkgadd -d http://zaytsev.su/solaris-virtio/packages/sol10/SUNWvioblk-1.2
 
 <h4>Moving an existing installation to virtio</h4>
 <ul>
@@ -65,9 +66,9 @@ Installation of &ltSUNWviobl&gt was successful.
 <li>I don't need to tell you about bakups, do I?</li>
 <li>Inside the solaris instance, run 'touch /reconfigure', then shut it down.</li>
 <li>Attach the disk as a virtio device, like described above.</li>
-<li>Download the itu iso: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/vioblk-1.1-itu.iso>vioblk-1.1-itu.iso</a>. The installation CD obviously lacks the virtio driver, so you need the itu iso.</li>
+<li>Download the itu iso: <a href=http://zaytsev.su/solaris-virtio/packages/sol10/vioblk-1.2-itu.iso>vioblk-1.2-itu.iso</a>. The installation CD obviously lacks the virtio driver, so you need the itu iso.</li>
 <li>Attach the installation CD image and the itu image, boot from the installation CD:
-<pre>-cdrom sol-10-u10-ga2-x86-dvd.iso -boot d -drive file=vioblk-1.1-itu.iso,media=cdrom</pre>
+<pre>-cdrom sol-10-u10-ga2-x86-dvd.iso -boot d -drive file=vioblk-1.2-itu.iso,media=cdrom</pre>
 </li>
 <li>Install the itu, just like described above.</li>
 <li>Start a user shell, don't mount the existing system's rpool when asked.</li>
