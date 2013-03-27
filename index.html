@@ -1,12 +1,12 @@
 
-<title>Solaris 10 / 11 Virtio drivers</title>
+<title>Solaris 10 Virtio block driver</title>
 </head>
 
 <p>
 <a href=http://zaytsev.su>Back</a>
 </p>
 
-<p> <h2>Yes, finally, virtio drivers for Solaris 10 / 11.</h2>At least the virtio-block driver. Virtio-net is still work in progress.</p>
+<p><h2>Yes, finally, the virtio driver for Solaris 10.</h2></p>
 
 
 <h3>Current version: 1.2</h3> Older versions in <a href=packages> archive</a>
@@ -78,8 +78,12 @@ Or both in one step: pkgadd -d http://zaytsev.su/solaris-virtio/packages/sol10/S
 </ul>
 
 <h3>Solaris 11</h3>
-Work in progress.
-
+Ugh, it was planned, but turned out be be not-so-trivial to get right. And I'm not working on it in my spare time.
+If you really want it:
+<ul>
+<li>Here's some code: <a href=https://github.com/xl0/solaris-virtio/tree/solaris11>https://github.com/xl0/solaris-virtio/tree/solaris11</a>, feel free to pick it up, but it needs quite some love and a lot of testing before it could be user in production.</li>
+<li>I'm not working on solaris in my spare time, but might consider a contract job.</li>
+</ul>
 
 <h2>Building from source code</h2>
 <h3>Solaris 10</h3>
@@ -88,11 +92,10 @@ Work in progress.
 <li>Download the driver source code from <a href=https://github.com/xl0/solaris-virtio>github</a>. Either using git, or get the generated <a href=https://github.com/xl0/solaris-virtio/tarball/master>tarball</a>.</li>
 <li>Run gmake in the driver source directory. It should build the driver and generate the package/itu iso in the pkg-sol10 directory</li>
 </ul>
-<h3>Solaris 11</h3>
-Work in progress
 
 <h2>Known problems</h2>
-Unless the disk has an EFI partition and is part on a zpool, format(1) will ask you about the disk geometry. Just confirm the default values. Sorry, I don't know how to make both format(1) and the Solaris 10 installer happy.
+<h3>Solaris 10</h3>
+Unless the disk has an EFI partition and is part of a zpool, format(1) will ask you about the disk geometry. Just confirm the default values. Sorry, I don't know how to make both format(1) and the Solaris 10 installer happy.
 
 <h2>Reporting bugs</h2>
 Please report any bugs <a href=https://github.com/xl0/solaris-virtio/issues>here</a>. Really, report them. I enjoy fixing bugs.
