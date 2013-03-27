@@ -497,6 +497,12 @@ vioblk_devid_init(void *arg, dev_info_t *devinfo, ddi_devid_t *devid)
 		return (DDI_FAILURE);
 	}
 
+	/* No devid supplied by host - make up something */
+	if (!sc->devid[0]) {
+		snprintf(sc->devid, VIRTIO_BLK_ID_BYTES, "vioblk-%d",
+		    ddi_get_instance(devinfo));
+	}
+
 	ret = ddi_devid_init(devinfo, DEVID_ATA_SERIAL,
 	    VIRTIO_BLK_ID_BYTES, sc->devid, devid);
 	if (ret != DDI_SUCCESS) {
@@ -505,7 +511,8 @@ vioblk_devid_init(void *arg, dev_info_t *devinfo, ddi_devid_t *devid)
 	}
 
 	dev_debug(sc->sc_dev, CE_NOTE,
-	    "devid %x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x",
+	    "devid: '%s' (%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)",
+	    sc->devid,
 	    sc->devid[0], sc->devid[1], sc->devid[2], sc->devid[3],
 	    sc->devid[4], sc->devid[5], sc->devid[6], sc->devid[7],
 	    sc->devid[8], sc->devid[9], sc->devid[10], sc->devid[11],
