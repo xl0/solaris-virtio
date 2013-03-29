@@ -2,7 +2,7 @@
 # 10 or 11
 SOLARIS=10
 
-export VERSION=1.2
+export VERSION=1.3
 
 #CFLAGS=-D_KERNEL -DDEBUG -m64 -xarch=sse2a -xmodel=kernel -g
 CFLAGS= -D_KERNEL -DDEBUG -m64 -mcmodel=kernel -mno-red-zone -ffreestanding
