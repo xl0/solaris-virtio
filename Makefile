@@ -1,5 +1,5 @@
-
 # 10 or 11
+# XXX Solaris 11 support is not really there. More info: http://zaytsev.su/solaris-virtio/
 SOLARIS=10
 
 export VERSION=1.3
